@@ -99,6 +99,8 @@ class PoseUtil constructor(private val bitmap1: Bitmap, private val bitmap2 : Bi
         val sol = Calib3d.solvePnPRansac(img1.objectPoints,img1.imagePoints,homography,cameraMat,
             rVec, tVec, true, SOLVEPNP_ITERATIVE)
         val i = 0
+
+
     }
 
     private fun buildCameraMatrix(model: FeatureModel) : MatOfDouble{

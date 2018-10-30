@@ -5,11 +5,7 @@ import android.app.AlertDialog
 import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
-import android.graphics.ImageFormat
-import android.graphics.Matrix
-import android.graphics.Point
-import android.graphics.RectF
-import android.graphics.SurfaceTexture
+import android.graphics.*
 import android.hardware.camera2.CameraAccessException
 import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraCharacteristics
@@ -37,6 +33,9 @@ import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
 import io.navendra.openvision.R
+import io.navendra.openvision.pose.PoseUtil
+import org.opencv.android.LoaderCallbackInterface
+import org.opencv.android.OpenCVLoader
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
@@ -156,22 +155,46 @@ class Camera2Fragment : Fragment(), View.OnClickListener,
 
         val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
         val currFileName = "Image_$timeStamp.jpeg"
-        OV_CURR_FILE_NAME = currFileName
-        OV_REF_FILE_NAME = currFileName
-        file = File(mediaStorageDir, currFileName)
+        if(!OV_REF_FILE_NAME.isNullOrEmpty()){
+            OV_CURR_FILE_NAME = currFileName
+        }else{
+            OV_REF_FILE_NAME = currFileName
+        }
 
+        OV_CURR_FILE_NAME = currFileName
+        file = File(mediaStorageDir, currFileName)
+        val rotation = activity?.windowManager!!.defaultDisplay.rotation
         val contentValues = ContentValues()
         contentValues.put(MediaStore.Images.Media.TITLE, "ImageName")
         contentValues.put(MediaStore.Images.Media.DATE_TAKEN, System.currentTimeMillis())
-//        contentValues.put(MediaStore.Images.Media.ORIENTATION, ORIENTATIONS.get(rotation))
+        contentValues.put(MediaStore.Images.Media.ORIENTATION, ORIENTATIONS.get(rotation))
         contentValues.put(MediaStore.Images.Media.CONTENT_TYPE,"image/jpeg")
         contentValues.put("_data", file.absolutePath)
+        if(OV_REF_FILE_NAME.isNullOrEmpty()){
+            OV_REF_FILE_NAME = file.absolutePath
+        }
+        OV_CURR_FILE_PATH = file.absolutePath
+
 
         val contentResolver = activity?.contentResolver
         contentResolver?.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,contentValues)
 
         backgroundHandler?.post(ImageSaver(it.acquireNextImage(), file))
 
+//        if(OV_CURR_FILE_PATH != OV_REF_FILE_PATH && !OV_REF_FILE_PATH.isNullOrEmpty()){
+            doPose(mediaStorageDir)
+//        }
+    }
+
+    fun doPose(storageDir : File){
+        val files = storageDir.listFiles()
+        val src1 = files[0].absolutePath
+        val src2 = files[1].absolutePath
+        val bitmap1 : Bitmap = BitmapFactory.decodeFile( src1 )
+        val bitmap2 : Bitmap = BitmapFactory.decodeFile( src2 )
+
+        PoseUtil(bitmap1,bitmap2)
+            .build()
     }
 
 
@@ -286,6 +309,8 @@ class Camera2Fragment : Fragment(), View.OnClickListener,
 //        val newFileName = "${System.currentTimeMillis()} -  $PIC_FILE_NAME"
 //        file = File(activity!!.getExternalFilesDir(null), newFileName)
     }
+
+
 
     override fun onResume() {
         super.onResume()

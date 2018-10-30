@@ -8,3 +8,6 @@ package io.navendra.openvision.Camera
 @JvmField var OV_MEDIA_DIRECTORY = ""
 @JvmField var OV_REF_FILE_NAME = ""
 @JvmField var OV_CURR_FILE_NAME = ""
+
+@JvmField var OV_CURR_FILE_PATH = ""
+@JvmField var OV_REF_FILE_PATH = ""
