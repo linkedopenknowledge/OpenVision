@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.view.TextureView
 import android.graphics.SurfaceTexture
 import android.hardware.camera2.*
+import android.os.Environment
 import android.util.Size
 import android.support.v4.app.ActivityCompat
 import android.os.HandlerThread
@@ -14,6 +15,14 @@ import android.os.Handler
 import kotlinx.android.synthetic.main.activity_camera.*
 import android.view.Surface
 import java.util.*
+import android.util.Log
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
+import java.text.SimpleDateFormat
+import android.graphics.Bitmap
+
+
 
 
 class CameraActivity : AppCompatActivity() {
@@ -25,6 +34,7 @@ class CameraActivity : AppCompatActivity() {
     private  var backgroundThread : HandlerThread? = null
     private  var backgroundHandler : Handler? = null
     private  var captureRequestBuilder : CaptureRequest.Builder? = null
+    private var galleryFolder : File? = null
     private lateinit var captureRequest : CaptureRequest
     private var cameraCaptureSession : CameraCaptureSession? = null
 
@@ -37,9 +47,30 @@ class CameraActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_camera)
         initManager()
+        createImageGallery()
+        floatingActionButton.setOnClickListener {
+            onPhotoClicked()
+        }
     }
 
-    fun initManager(){
+    override fun onResume() {
+        super.onResume()
+        openBackgroundThread()
+        if (textureView.isAvailable()) {
+            setUpCamera()
+            openCamera()
+        } else {
+            textureView.setSurfaceTextureListener(surfaceTextureListener)
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        closeCamera()
+        closeBackgroundThread()
+    }
+
+    private fun initManager(){
         cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
         cameraFacing = CameraCharacteristics.LENS_FACING_BACK
 
@@ -64,7 +95,7 @@ class CameraActivity : AppCompatActivity() {
 
         stateCallback = object : CameraDevice.StateCallback() {
             override fun onOpened(cameraDevice: CameraDevice) {
-               this@CameraActivity.cameraDevice = cameraDevice
+                this@CameraActivity.cameraDevice = cameraDevice
                 createPreviewSession()
             }
 
@@ -81,21 +112,37 @@ class CameraActivity : AppCompatActivity() {
 
     }
 
-    override fun onResume() {
-        super.onResume()
-        openBackgroundThread()
-        if (textureView.isAvailable()) {
-            setUpCamera()
-            openCamera()
-        } else {
-            textureView.setSurfaceTextureListener(surfaceTextureListener)
+    private fun setUpCamera() {
+        try {
+            for (cameraId in cameraManager.getCameraIdList()) {
+                val cameraCharacteristics = cameraManager.getCameraCharacteristics(cameraId)
+                if (cameraCharacteristics.get(CameraCharacteristics.LENS_FACING) === cameraFacing) {
+                    val streamConfigurationMap = cameraCharacteristics.get(
+                        CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP
+                    )
+                    previewSize = streamConfigurationMap!!.getOutputSizes(SurfaceTexture::class.java)[0]
+                    this.cameraId = cameraId
+                }
+            }
+        } catch (e: CameraAccessException) {
+            e.printStackTrace()
         }
+
     }
 
-    override fun onStop() {
-        super.onStop()
-        closeCamera()
-        closeBackgroundThread()
+    fun openCamera(){
+        try {
+            if (ActivityCompat.checkSelfPermission(
+                    this,
+                    android.Manifest.permission.CAMERA
+                ) == PackageManager.PERMISSION_GRANTED
+            ) {
+                cameraManager.openCamera(cameraId, stateCallback, backgroundHandler)
+            }
+        } catch (e: CameraAccessException) {
+            e.printStackTrace()
+        }
+
     }
 
     private fun closeCamera() {
@@ -118,48 +165,11 @@ class CameraActivity : AppCompatActivity() {
         }
     }
 
-
-    private fun setUpCamera() {
-        try {
-            for (cameraId in cameraManager.getCameraIdList()) {
-                val cameraCharacteristics = cameraManager.getCameraCharacteristics(cameraId)
-                if (cameraCharacteristics.get(CameraCharacteristics.LENS_FACING) === cameraFacing) {
-                    val streamConfigurationMap = cameraCharacteristics.get(
-                        CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP
-                    )
-                    previewSize = streamConfigurationMap!!.getOutputSizes(SurfaceTexture::class.java)[0]
-                    this.cameraId = cameraId
-                }
-            }
-        } catch (e: CameraAccessException) {
-            e.printStackTrace()
-        }
-
-    }
-
-
-    fun openCamera(){
-        try {
-            if (ActivityCompat.checkSelfPermission(
-                    this,
-                    android.Manifest.permission.CAMERA
-                ) == PackageManager.PERMISSION_GRANTED
-            ) {
-                cameraManager.openCamera(cameraId, stateCallback, backgroundHandler)
-            }
-        } catch (e: CameraAccessException) {
-            e.printStackTrace()
-        }
-
-    }
-
-
     private fun openBackgroundThread() {
         backgroundThread = HandlerThread("camera_background_thread")
         backgroundThread?.start()
         backgroundHandler = Handler(backgroundThread?.getLooper())
     }
-
 
     private fun createPreviewSession() {
         try {
@@ -201,6 +211,42 @@ class CameraActivity : AppCompatActivity() {
             e.printStackTrace()
         }
 
+    }
+
+    fun createImageGallery() {
+        val storageDirectory = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+        galleryFolder = File(storageDirectory, resources.getString(R.string.app_name))
+        if (!galleryFolder!!.exists()) {
+            val wasCreated = galleryFolder?.mkdirs()!!
+            if (!wasCreated) {
+                Log.e("CapturedImages", "Failed to create directory")
+            }
+        }
+    }
+
+    @Throws(IOException::class)
+    private fun createImageFile(galleryFolder: File): File {
+        val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        val imageFileName = "image_" + timeStamp + "_"
+        return File.createTempFile(imageFileName, ".jpg", galleryFolder)
+    }
+
+    fun onPhotoClicked(){
+        var outputPhoto: FileOutputStream? = null
+        try {
+            outputPhoto = FileOutputStream(createImageFile(galleryFolder!!))
+            textureView.bitmap
+                .compress(Bitmap.CompressFormat.PNG, 100, outputPhoto)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            try {
+                outputPhoto?.close()
+            } catch (e: IOException) {
+                e.printStackTrace()
+            }
+
+        }
     }
 
 }
