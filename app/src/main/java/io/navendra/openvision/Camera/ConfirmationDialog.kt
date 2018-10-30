@@ -1,4 +1,4 @@
-package io.navendra.openvision
+package io.navendra.openvision.Camera
 
 import android.Manifest
 import android.app.AlertDialog
@@ -16,7 +16,8 @@ class ConfirmationDialog : DialogFragment() {
             .setMessage("Kindly give permissions")
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 parentFragment?.requestPermissions(arrayOf(Manifest.permission.CAMERA),
-                    REQUEST_CAMERA_PERMISSION)
+                    REQUEST_CAMERA_PERMISSION
+                )
             }
             .setNegativeButton(android.R.string.cancel) { _, _ ->
                 parentFragment?.activity?.finish()

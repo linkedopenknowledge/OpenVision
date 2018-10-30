@@ -15,18 +15,5 @@ class CalibrationActivity : AppCompatActivity() {
         setContentView(R.layout.activity_calibration)
     }
 
-    lateinit var s : Settings
-    lateinit var inputFile : File
-    val inputFilePath = ""
 
-    lateinit var moshi: Moshi
-
-    fun openFile(){
-        moshi = Moshi.Builder()
-            .add(KotlinJsonAdapterFactory())
-            .build()
-
-        
-
-    }
 }

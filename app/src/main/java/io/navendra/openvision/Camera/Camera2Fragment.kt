@@ -1,7 +1,8 @@
-package io.navendra.openvision
+package io.navendra.openvision.Camera
 
 import android.Manifest
 import android.app.AlertDialog
+import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.ImageFormat
@@ -20,8 +21,10 @@ import android.hardware.camera2.CaptureResult
 import android.hardware.camera2.TotalCaptureResult
 import android.media.ImageReader
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
 import android.os.HandlerThread
+import android.provider.MediaStore
 import android.support.v4.app.ActivityCompat
 import android.support.v4.app.Fragment
 import android.support.v4.content.ContextCompat
@@ -33,9 +36,10 @@ import android.view.Surface
 import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
+import io.navendra.openvision.R
 import java.io.File
-import java.util.Arrays
-import java.util.Collections
+import java.text.SimpleDateFormat
+import java.util.*
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import kotlin.collections.ArrayList
@@ -137,8 +141,42 @@ class Camera2Fragment : Fragment(), View.OnClickListener,
      * still image is ready to be saved.
      */
     private val onImageAvailableListener = ImageReader.OnImageAvailableListener {
+
+        val galleryPath = "${Environment.getExternalStorageDirectory()}/${Environment.DIRECTORY_DCIM}/"
+        val mediaStorageDir = File(galleryPath, getString(R.string.app_name))
+
+        if(!mediaStorageDir.exists()){
+            if (!mediaStorageDir.mkdirs()) {
+                Log.d("OpenVision", "failed to create directory");
+            }
+        }
+
+        OV_MEDIA_DIRECTORY = mediaStorageDir.absolutePath
+
+
+        val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        val currFileName = "Image_$timeStamp.jpeg"
+        OV_CURR_FILE_NAME = currFileName
+        OV_REF_FILE_NAME = currFileName
+        file = File(mediaStorageDir, currFileName)
+
+        val contentValues = ContentValues()
+        contentValues.put(MediaStore.Images.Media.TITLE, "ImageName")
+        contentValues.put(MediaStore.Images.Media.DATE_TAKEN, System.currentTimeMillis())
+//        contentValues.put(MediaStore.Images.Media.ORIENTATION, ORIENTATIONS.get(rotation))
+        contentValues.put(MediaStore.Images.Media.CONTENT_TYPE,"image/jpeg")
+        contentValues.put("_data", file.absolutePath)
+
+        val contentResolver = activity?.contentResolver
+        contentResolver?.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,contentValues)
+
         backgroundHandler?.post(ImageSaver(it.acquireNextImage(), file))
+
     }
+
+
+
+
 
     /**
      * [CaptureRequest.Builder] for the camera preview
@@ -245,7 +283,8 @@ class Camera2Fragment : Fragment(), View.OnClickListener,
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         super.onActivityCreated(savedInstanceState)
-        file = File(activity!!.getExternalFilesDir(null), PIC_FILE_NAME)
+//        val newFileName = "${System.currentTimeMillis()} -  $PIC_FILE_NAME"
+//        file = File(activity!!.getExternalFilesDir(null), newFileName)
     }
 
     override fun onResume() {
@@ -271,10 +310,23 @@ class Camera2Fragment : Fragment(), View.OnClickListener,
 
     private fun requestCameraPermission() {
         if (shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)) {
-            ConfirmationDialog().show(childFragmentManager, FRAGMENT_DIALOG)
+            ConfirmationDialog()
+                .show(childFragmentManager, FRAGMENT_DIALOG)
         } else {
-            requestPermissions(arrayOf(Manifest.permission.CAMERA), REQUEST_CAMERA_PERMISSION)
+            requestPermissions(arrayOf(Manifest.permission.CAMERA),
+                REQUEST_CAMERA_PERMISSION
+            )
         }
+
+        if (shouldShowRequestPermissionRationale(Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
+            ConfirmationDialog()
+                .show(childFragmentManager, FRAGMENT_DIALOG)
+        } else {
+            requestPermissions(arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE),
+                REQUEST_STORAGE_PERMISSION
+            )
+        }
+
     }
 
     override fun onRequestPermissionsResult(requestCode: Int,
@@ -315,7 +367,8 @@ class Camera2Fragment : Fragment(), View.OnClickListener,
                 // For still image captures, we use the largest available size.
                 val largest = Collections.max(
                     Arrays.asList(*map.getOutputSizes(ImageFormat.JPEG)),
-                    CompareSizesByArea())
+                    CompareSizesByArea()
+                )
                 imageReader = ImageReader.newInstance(largest.width, largest.height,
                     ImageFormat.JPEG, /*maxImages*/ 2).apply {
                     setOnImageAvailableListener(onImageAvailableListener, backgroundHandler)
@@ -335,16 +388,20 @@ class Camera2Fragment : Fragment(), View.OnClickListener,
                 var maxPreviewWidth = if (swappedDimensions) displaySize.y else displaySize.x
                 var maxPreviewHeight = if (swappedDimensions) displaySize.x else displaySize.y
 
-                if (maxPreviewWidth > MAX_PREVIEW_WIDTH) maxPreviewWidth = MAX_PREVIEW_WIDTH
-                if (maxPreviewHeight > MAX_PREVIEW_HEIGHT) maxPreviewHeight = MAX_PREVIEW_HEIGHT
+                if (maxPreviewWidth > MAX_PREVIEW_WIDTH) maxPreviewWidth =
+                        MAX_PREVIEW_WIDTH
+                if (maxPreviewHeight > MAX_PREVIEW_HEIGHT) maxPreviewHeight =
+                        MAX_PREVIEW_HEIGHT
 
                 // Danger, W.R.! Attempting to use too large a preview size could  exceed the camera
                 // bus' bandwidth limitation, resulting in gorgeous previews but the storage of
                 // garbage capture data.
-                previewSize = chooseOptimalSize(map.getOutputSizes(SurfaceTexture::class.java),
+                previewSize = chooseOptimalSize(
+                    map.getOutputSizes(SurfaceTexture::class.java),
                     rotatedPreviewWidth, rotatedPreviewHeight,
                     maxPreviewWidth, maxPreviewHeight,
-                    largest)
+                    largest
+                )
 
                 // We fit the aspect ratio of TextureView to the size of preview we picked.
 //                if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
@@ -795,6 +852,7 @@ class Camera2Fragment : Fragment(), View.OnClickListener,
             }
         }
 
-        @JvmStatic fun newInstance(): Camera2Fragment = Camera2Fragment()
+        @JvmStatic fun newInstance(): Camera2Fragment =
+            Camera2Fragment()
     }
 }

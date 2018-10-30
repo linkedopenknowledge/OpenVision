@@ -1,4 +1,4 @@
-package io.navendra.openvision
+package io.navendra.openvision.Camera
 
 import android.app.AlertDialog
 import android.app.Dialog

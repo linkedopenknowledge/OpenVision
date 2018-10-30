@@ -9,6 +9,7 @@ class PoseEstimator constructor( val listener: PoseListener,
 
     fun startEstimation(){
         listener.start()
+
     }
 
     fun onImageAvailable(){

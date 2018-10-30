@@ -1,4 +1,4 @@
-package io.navendra.openvision
+package io.navendra.openvision.Camera
 
 import android.util.Size
 import java.lang.Long.signum
